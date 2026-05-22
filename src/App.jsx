@@ -31,6 +31,8 @@ export default function App() {
     ["Max total pressure", `${format(sim.maxP / 1000)} kPa`],
     ["Max contact pressure", `${format(sim.maxContactP / 1000)} kPa`],
     ["Lift force", `${format(sim.lift)} N`],
+    ["Avg. |q|", `${format(sim.avgFlowRate * 1e9)} mm²/s`],
+    ["Avg. shear stress", `${format(sim.avgShear)} Pa`],
     ["Avg. removal rate", `${format(sim.avgRR)} arb.`],
     ["Non-uniformity", `${format(sim.nu)} %`],
     ["Re", `${format(sim.re)}`],
@@ -77,7 +79,7 @@ export default function App() {
           </Panel>
 
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
               {cards.map(([k, v]) => (
                 <div key={k} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg">
                   <div className="text-xs text-slate-400">{k}</div>
@@ -124,6 +126,7 @@ export default function App() {
           <Panel title="Validation checks">
             <CheckRow label="Thin-gap condition" value={sim.epsilon < 0.01} detail={`ε = h₀/L = ${format(sim.epsilon)}`} />
             <CheckRow label="Low-Re lubrication trend" value={sim.re < 10} detail={`Re = ρUh₀/μ = ${format(sim.re)}`} />
+            <CheckRow label="Flow-rate calculation" value={sim.avgFlowRate >= 0} detail={`avg |q| = ${format(sim.avgFlowRate * 1e9)} mm²/s`} />
             <CheckRow label="Positive gap profile" value={sim.rawMinGap > 0} detail={`raw min h = ${format(sim.rawMinGap * 1e6)} µm`} />
             <CheckRow label="Converging wedge for U direction" value={sim.isConverging} detail={sim.wedgeDetail} />
             <CheckRow label="Pressure generation" value={sim.maxFluidP > 1e-6 || sim.maxContactP > 1e-6} detail={sim.pressureDetail} />
@@ -229,6 +232,31 @@ function runSimulation(params) {
   const viscousPressureScale = Math.abs((mu0 * U * L) / Math.max(h0 * h0, minNumericalGap * minNumericalGap));
   const contactScale = 0.15 * Math.max(maxFluidP, viscousPressureScale, 1);
 
+  // Depth-integrated lubrication flow rates per unit width:
+  // qx = -h^3/(12 μeff) dp/dx + Uh/2
+  // qy = -h^3/(12 μeff) dp/dy + Vh/2
+  const qx = Array.from({ length: N }, () => Array(N).fill(0));
+  const qy = Array.from({ length: N }, () => Array(N).fill(0));
+  const qMag = Array.from({ length: N }, () => Array(N).fill(0));
+  let sumFlowRate = 0;
+
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const im = Math.max(i - 1, 0);
+      const ip = Math.min(i + 1, N - 1);
+      const jm = Math.max(j - 1, 0);
+      const jp = Math.min(j + 1, N - 1);
+      const dpdx = ip === im ? 0 : (p[j][ip] - p[j][im]) / ((ip - im) * dx);
+      const dpdy = jp === jm ? 0 : (p[jp][i] - p[jm][i]) / ((jp - jm) * dy);
+      const mobility = Math.pow(h[j][i], 3) / (12 * mue[j][i]);
+
+      qx[j][i] = -mobility * dpdx + 0.5 * U * h[j][i];
+      qy[j][i] = -mobility * dpdy + 0.5 * V * h[j][i];
+      qMag[j][i] = Math.sqrt(qx[j][i] * qx[j][i] + qy[j][i] * qy[j][i]);
+      sumFlowRate += qMag[j][i];
+    }
+  }
+
   const contact = Array.from({ length: N }, () => Array(N).fill(0));
   const pTotal = Array.from({ length: N }, () => Array(N).fill(0));
   const shear = Array.from({ length: N }, () => Array(N).fill(0));
@@ -238,6 +266,7 @@ function runSimulation(params) {
   let maxContactP = 0;
   let lift = 0;
   let sumRR = 0;
+  let sumShear = 0;
   let count = 0;
   const kp = 1;
 
@@ -252,11 +281,14 @@ function runSimulation(params) {
       maxContactP = Math.max(maxContactP, contact[j][i]);
       lift += pTotal[j][i] * dx * dy;
       sumRR += rr[j][i];
+      sumShear += shear[j][i];
       count++;
     }
   }
 
   const avgRR = sumRR / count;
+  const avgShear = sumShear / count;
+  const avgFlowRate = sumFlowRate / count;
   let variance = 0;
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
@@ -292,7 +324,12 @@ function runSimulation(params) {
     maxShear,
     maxRR,
     lift,
+    avgFlowRate,
+    avgShear,
     avgRR,
+    qx,
+    qy,
+    qMag,
     nu,
     re,
     epsilon,

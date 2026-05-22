@@ -31,7 +31,7 @@ export default function App() {
     ["Max total pressure", `${format(sim.maxP / 1000)} kPa`],
     ["Max contact pressure", `${format(sim.maxContactP / 1000)} kPa`],
     ["Lift force", `${format(sim.lift)} N`],
-    ["Avg. |q|", `${format(sim.avgFlowRate * 1e9)} mm²/s`],
+    ["Avg. |q|", `${format(sim.avgFlowRate * 1e6)} mm²/s`],
     ["Avg. shear stress", `${format(sim.avgShear)} Pa`],
     ["Avg. removal rate", `${format(sim.avgRR)} arb.`],
     ["Non-uniformity", `${format(sim.nu)} %`],
@@ -79,7 +79,7 @@ export default function App() {
           </Panel>
 
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {cards.map(([k, v]) => (
                 <div key={k} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg">
                   <div className="text-xs text-slate-400">{k}</div>
@@ -126,7 +126,7 @@ export default function App() {
           <Panel title="Validation checks">
             <CheckRow label="Thin-gap condition" value={sim.epsilon < 0.01} detail={`ε = h₀/L = ${format(sim.epsilon)}`} />
             <CheckRow label="Low-Re lubrication trend" value={sim.re < 10} detail={`Re = ρUh₀/μ = ${format(sim.re)}`} />
-            <CheckRow label="Flow-rate calculation" value={sim.avgFlowRate >= 0} detail={`avg |q| = ${format(sim.avgFlowRate * 1e9)} mm²/s`} />
+            <CheckRow label="Flow-rate calculation" value={sim.avgFlowRate >= 0} detail={`avg |q| = ${format(sim.avgFlowRate * 1e6)} mm²/s`} />
             <CheckRow label="Positive gap profile" value={sim.rawMinGap > 0} detail={`raw min h = ${format(sim.rawMinGap * 1e6)} µm`} />
             <CheckRow label="Converging wedge for U direction" value={sim.isConverging} detail={sim.wedgeDetail} />
             <CheckRow label="Pressure generation" value={sim.maxFluidP > 1e-6 || sim.maxContactP > 1e-6} detail={sim.pressureDetail} />
